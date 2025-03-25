@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blockchain Explorer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon_io/favicon.ico') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Blockchain Explorer</h1>
+
+        <div class="actions">
+            <button onclick="getChain()">View Blockchain</button>
+            <button onclick="mineBlock()">Mine Block</button>
+        </div>
+
+        <h2>Add Transaction</h2>
+        <div class="transaction-form">
+            <input type="text" id="sender" placeholder="Sender">
+            <input type="text" id="receiver" placeholder="Receiver">
+            <input type="number" id="amount" placeholder="Amount">
+            <button onclick="addTransaction()">Submit Transaction</button>
+        </div>
+
+        <h2>Blockchain Data</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Block</th>
+                    <th>Hash</th>
+                    <th>Previous Hash</th>
+                    <th>Transactions</th>
+                </tr>
+            </thead>
+            <tbody id="blockchain">
+                <!-- Blockchain data will be displayed here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function getChain() {
+            let response = await fetch("/get_chain");
+            let data = await response.json();
+            let chainTable = document.getElementById("blockchain");
+            chainTable.innerHTML = "";
+            
+            data.chain.forEach((block) => {
+                let row = `<tr>
+                    <td>${block.index}</td>
+                    <td>${block.hash || "N/A"}</td>
+                    <td>${block.previous_hash || "N/A"}</td>
+                    <td>${block.transactions.length > 0 ? formatTransactions(block.transactions) : "None"}</td>
+                </tr>`;
+                chainTable.innerHTML += row;
+            });
+        }
+
+        function formatTransactions(transactions) {
+            return transactions.map(tx => 
+                `Sender: ${tx.sender}, Receiver: ${tx.receiver}, Amount: ${tx.amount}`
+            ).join("<br>");
+        }
+
+        async function mineBlock() {
+            await fetch("/mine_block", { method: "GET" });
+            alert("Block Mined!");
+            getChain();
+        }
+
+        async function addTransaction() {
+            let sender = document.getElementById("sender").value;
+            let receiver = document.getElementById("receiver").value;
+            let amount = document.getElementById("amount").value;
+
+            if (!sender || !receiver || !amount) {
+                alert("Please fill all fields!");
+                return;
+            }
+
+            await fetch("/add_transaction", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sender, receiver, amount }),
+            });
+
+            alert("Transaction Added!");
+            getChain();
+        }
+    </script>
+</body>
+</html>
