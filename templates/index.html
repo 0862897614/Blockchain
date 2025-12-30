@@ -1,6 +1,6 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,86 +10,329 @@
 </head>
 <body>
     <div class="container">
-        <h1>Blockchain Explorer</h1>
-
-        <div class="actions">
-            <button onclick="getChain()">View Blockchain</button>
-            <button onclick="mineBlock()">Mine Block</button>
+        <div class="header">
+            <h1>⛓️ Blockchain Explorer</h1>
+            <p>Khám phá và lưu trữ với blockchain một cách trực quan</p>
+            <button onclick="toggleInstruction()" class="instruction-btn">❓ Hướng dẫn</button>
+            <div class="instruction" id="instructionBox" style="display: none;">
+                <strong>💡 Hướng dẫn sử dụng:</strong> 
+                <ol>
+                    <li>Điền thông tin giao dịch (Người gửi, Người nhận, Số tiền)</li>
+                    <li>Click <strong>"⛏️ Khai thác khối"</strong> để đào block với giao dịch vừa thêm</li>
+                    <li>Click <strong>"✔️ Xác thực chuỗi"</strong> để kiểm tra tính hợp lệ của blockchain</li>
+                    <li>Click vào dòng trong bảng để xem chi tiết full hash</li>
+                    <li><em>💾 Dữ liệu blockchain sẽ được lưu tự động (Persistence) - không sợ mất dữ liệu khi tắt browser!</em></li>
+                </ol>
+            </div>
         </div>
 
-        <h2>Add Transaction</h2>
-        <div class="transaction-form">
-            <input type="text" id="sender" placeholder="Sender">
-            <input type="text" id="receiver" placeholder="Receiver">
-            <input type="number" id="amount" placeholder="Amount">
-            <button onclick="addTransaction()">Submit Transaction</button>
+        <div class="stats-bar">
+            <div class="stat-item">
+                <span class="stat-number" id="totalBlocks">1</span>
+                <span class="stat-label">Tổng số khối</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="totalTxs">0</span>
+                <span class="stat-label">Tổng giao dịch</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="pendingTxs">0</span>
+                <span class="stat-label">Giao dịch chờ</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="chainValid">✓</span>
+                <span class="stat-label">Trạng thái chuỗi</span>
+            </div>
         </div>
 
-        <h2>Blockchain Data</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Block</th>
-                    <th>Hash</th>
-                    <th>Previous Hash</th>
-                    <th>Transactions</th>
-                </tr>
-            </thead>
-            <tbody id="blockchain">
-                <!-- Blockchain data will be displayed here -->
-            </tbody>
-        </table>
+        <div class="content">
+            <div class="card">
+                <h2>⚙️ Điều khiển Blockchain</h2>
+                <div class="actions">
+                    <button onclick="getChain()" class="btn btn-primary">👁️ Xem Blockchain</button>
+                    <button onclick="mineBlock()" class="btn btn-success">⛏️ Khai thác khối</button>
+                    <button onclick="validateChain()" class="btn btn-info">✔️ Xác thực chuỗi</button>
+                    <button onclick="resetChain()" class="btn btn-warning">🔄 Reset Blockchain</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>➕ Thêm giao dịch mới</h2>
+                <div class="transaction-form">
+                    <input type="text" id="sender" placeholder="Người gửi" class="input-field">
+                    <input type="text" id="receiver" placeholder="Người nhận" class="input-field">
+                    <input type="number" id="amount" placeholder="Số tiền" class="input-field">
+                    <button onclick="addTransaction()" class="btn btn-submit">⚡ Gửi</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card full-width" id="blockchainTable">
+            <h2>📊 Dữ liệu Blockchain (Click vào dòng để xem chi tiết)</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Khối</th>
+                            <th>Hash</th>
+                            <th>Hash trước</th>
+                            <th>Thời gian</th>
+                            <th>Giao dịch</th>
+                            <th>Nonce</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blockchain">
+                        <!-- Blockchain data will be displayed here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for block details -->
+    <div id="blockModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>📋 Chi tiết Block</h2>
+            <div id="blockDetails"></div>
+            <button onclick="closeModal()" class="btn btn-primary">Đóng</button>
+        </div>
     </div>
 
     <script>
-        async function getChain() {
-            let response = await fetch("/get_chain");
-            let data = await response.json();
+        let blockchainData = [];
+        const STORAGE_KEY = 'blockchain_data';
+
+        function toggleInstruction() {
+            let instructionBox = document.getElementById("instructionBox");
+            if (instructionBox.style.display === "none") {
+                instructionBox.style.display = "block";
+            } else {
+                instructionBox.style.display = "none";
+            }
+        }
+
+        // Load blockchain from localStorage
+        function loadBlockchainFromStorage() {
+            try {
+                let saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    blockchainData = JSON.parse(saved);
+                    updateStatsLocal();
+                    displayBlockchain();
+                    return true;
+                }
+            } catch (error) {
+                console.error("Error loading from localStorage:", error);
+            }
+            return false;
+        }
+
+        // Save blockchain to localStorage
+        function saveBlockchainToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(blockchainData));
+            } catch (error) {
+                console.error("Error saving to localStorage:", error);
+            }
+        }
+
+        // Update stats from local blockchain data (without API call)
+        function updateStatsLocal() {
+            let totalBlocks = blockchainData.length;
+            let totalTransactions = blockchainData.reduce((sum, block) => sum + block.transactions.length, 0);
+            // Note: pending_transactions would need server state
+            document.getElementById("totalBlocks").textContent = totalBlocks;
+            document.getElementById("totalTxs").textContent = totalTransactions;
+        }
+
+        // Display blockchain from local data
+        function displayBlockchain() {
             let chainTable = document.getElementById("blockchain");
             chainTable.innerHTML = "";
             
-            data.chain.forEach((block) => {
-                let row = `<tr>
-                    <td>${block.index}</td>
-                    <td>${block.hash || "N/A"}</td>
-                    <td>${block.previous_hash || "N/A"}</td>
-                    <td>${block.transactions.length > 0 ? formatTransactions(block.transactions) : "None"}</td>
+            blockchainData.forEach((block, index) => {
+                let txText = "Không có giao dịch";
+                if (block.transactions.length > 0) {
+                    txText = block.transactions.map(tx => 
+                        `${tx.sender} → ${tx.receiver}: ${tx.amount}`
+                    ).join("<br>");
+                }
+                let row = `<tr onclick="showBlockDetails(${index})">
+                    <td><span class="block-number">${block.index}</span></td>
+                    <td><code>${block.hash.substring(0, 8)}...</code></td>
+                    <td><code>${block.previous_hash.substring(0, 8)}...</code></td>
+                    <td>${block.timestamp}</td>
+                    <td>${txText}</td>
+                    <td>${block.nonce}</td>
                 </tr>`;
                 chainTable.innerHTML += row;
             });
         }
 
-        function formatTransactions(transactions) {
-            return transactions.map(tx => 
-                `Sender: ${tx.sender}, Receiver: ${tx.receiver}, Amount: ${tx.amount}`
-            ).join("<br>");
+        async function getChain() {
+            try {
+                let response = await fetch("/get_chain");
+                let data = await response.json();
+                blockchainData = data.chain;
+                saveBlockchainToStorage();
+                updateStatsLocal();
+                displayBlockchain();
+                
+                async function updateStatsFromServer() {
+                    try {
+                        let statsResp = await fetch("/get_stats");
+                        let statsData = await statsResp.json();
+                        document.getElementById("pendingTxs").textContent = statsData.pending_transactions;
+                        document.getElementById("chainValid").textContent = statsData.chain_valid ? "✓" : "✗";
+                    } catch (e) { }
+                }
+                updateStatsFromServer();
+                
+                // Smooth scroll to blockchain table
+                setTimeout(() => {
+                    let blockchainTableElement = document.getElementById("blockchainTable");
+                    blockchainTableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            } catch (error) {
+                alert("Lỗi: " + error);
+            }
+        }
+
+        function showBlockDetails(index) {
+            let block = blockchainData[index];
+            if (!block) return;
+            
+            let txDetails = "Không có giao dịch";
+            if (block.transactions.length > 0) {
+                txDetails = block.transactions.map((tx, i) => 
+                    `<div class="tx-item"><strong>Giao dịch ${i + 1}:</strong><br>
+                    Người gửi: ${tx.sender}<br>
+                    Người nhận: ${tx.receiver}<br>
+                    Số tiền: ${tx.amount}<br>
+                    Thời gian: ${tx.timestamp}</div>`
+                ).join("");
+            }
+            
+            let details = `
+                <div class="block-detail">
+                    <p><strong>Chỉ số Block:</strong> ${block.index}</p>
+                    <p><strong>Hash:</strong><br><code class="full-hash">${block.hash}</code></p>
+                    <p><strong>Hash trước:</strong><br><code class="full-hash">${block.previous_hash}</code></p>
+                    <p><strong>Thời gian:</strong> ${block.timestamp}</p>
+                    <p><strong>Nonce:</strong> ${block.nonce}</p>
+                    <p><strong>Proof:</strong> ${block.proof}</p>
+                    <p><strong>Giao dịch:</strong></p>
+                    ${txDetails}
+                </div>
+            `;
+            
+            document.getElementById("blockDetails").innerHTML = details;
+            document.getElementById("blockModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("blockModal").style.display = "none";
         }
 
         async function mineBlock() {
-            await fetch("/mine_block", { method: "GET" });
-            alert("Block Mined!");
-            getChain();
+            try {
+                let response = await fetch("/mine_block");
+                if (response.ok) {
+                    alert("✨ Khối đã được đào thành công!");
+                    getChain();
+                } else {
+                    let error = await response.json();
+                    alert("⚠️ " + error.message);
+                }
+            } catch (error) {
+                alert("Lỗi: " + error);
+            }
+        }
+
+        async function resetChain() {
+            if (!confirm("⚠️ Bạn có chắc chắn muốn reset blockchain? Dữ liệu sẽ bị xóa hoàn toàn!")) {
+                return;
+            }
+            try {
+                let response = await fetch("/reset_chain");
+                if (response.ok) {
+                    let data = await response.json();
+                    blockchainData = data.chain;
+                    saveBlockchainToStorage();
+                    displayBlockchain();
+                    updateStatsLocal();
+                    alert("✨ Blockchain đã được reset!");
+                } else {
+                    alert("Lỗi reset blockchain");
+                }
+            } catch (error) {
+                alert("Lỗi: " + error);
+            }
         }
 
         async function addTransaction() {
-            let sender = document.getElementById("sender").value;
-            let receiver = document.getElementById("receiver").value;
-            let amount = document.getElementById("amount").value;
+            let sender = document.getElementById("sender").value.trim();
+            let receiver = document.getElementById("receiver").value.trim();
+            let amount = document.getElementById("amount").value.trim();
 
             if (!sender || !receiver || !amount) {
-                alert("Please fill all fields!");
+                alert("❌ Vui lòng điền đầy đủ thông tin!");
                 return;
             }
 
-            await fetch("/add_transaction", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sender, receiver, amount }),
-            });
+            try {
+                let response = await fetch("/add_transaction", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sender, receiver, amount: parseFloat(amount) }),
+                });
 
-            alert("Transaction Added!");
-            getChain();
+                if (response.ok) {
+                    alert("✅ Giao dịch đã được thêm!");
+                    document.getElementById("sender").value = "";
+                    document.getElementById("receiver").value = "";
+                    document.getElementById("amount").value = "";
+                    getChain();
+                } else {
+                    let error = await response.json();
+                    alert("⚠️ " + error.message);
+                }
+            } catch (error) {
+                alert("Lỗi: " + error);
+            }
         }
+
+        async function validateChain() {
+            try {
+                let response = await fetch("/validate_chain");
+                let data = await response.json();
+                let message = data.valid ? "✓ Chuỗi hợp lệ!" : "✗ Chuỗi không hợp lệ!";
+                alert(message);
+            } catch (error) {
+                alert("Lỗi: " + error);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            let modal = document.getElementById("blockModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // Load blockchain on page load
+        window.addEventListener('load', () => {
+            // Try to load from localStorage first
+            if (!loadBlockchainFromStorage()) {
+                // If no saved data, fetch from server
+                getChain();
+            } else {
+                // Show saved data from localStorage
+                console.log("Blockchain loaded from localStorage");
+            }
+        });
     </script>
 </body>
 </html>
